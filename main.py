@@ -8,8 +8,8 @@ import logging
 # Suppress unnecessary warnings
 logging.getLogger('google.generativeai').setLevel(logging.ERROR)
 
-# Configure Gemini API - replace with your actual API key
-genai.configure(api_key="AIzaSyB6ukvrEGV22YYOAJH5wzFCmIXBthkFqH4")
+# Configure Gemini API using Streamlit secrets
+genai.configure(api_key=st.secrets["general"]["GEN_KEY"])
 
 # Use the model specified in the example
 model = genai.GenerativeModel("gemini-2.5-flash")
