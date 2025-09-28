@@ -1,0 +1,4 @@
+matplotlib
+pandas
+google-generativeai
+google-api-python-client
