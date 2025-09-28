@@ -9,7 +9,7 @@ import logging
 logging.getLogger('google.generativeai').setLevel(logging.ERROR)
 
 # Configure Gemini API - replace with your actual API key
-genai.configure(api_key="your_api_key_here")
+genai.configure(api_key="AIzaSyB6ukvrEGV22YYOAJH5wzFCmIXBthkFqH4")
 
 # Use the model specified in the example
 model = genai.GenerativeModel("gemini-2.5-flash")
