@@ -1,11 +1,15 @@
-_key='your_api_key_here'  # Replace with your actual API key
-
+import streamlit as st
 import google.generativeai as genai
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import StringIO
+import logging
 
-genai.configure(api_key=_key)
+# Suppress unnecessary warnings
+logging.getLogger('google.generativeai').setLevel(logging.ERROR)
+
+# Configure Gemini API - replace with your actual API key
+genai.configure(api_key="your_api_key_here")
 
 # Use the model specified in the example
 model = genai.GenerativeModel("gemini-2.5-flash")
@@ -136,7 +140,7 @@ data = '''{csv_data}'''
 df = pd.read_csv(StringIO(data))
 
 Then, plot the {vis} using df.
-Save the figure to 'chart.png' with plt.savefig('chart.png')
+Save the figure to 'chart.png' with plt.savefig('chart.png', bbox_inches='tight')
 Close with plt.close()
 
 Output ONLY the code. No explanations."""
@@ -148,50 +152,73 @@ Output ONLY the code. No explanations."""
         code = code.rsplit("\n", 1)[0]
     return code.strip()
 
-# Main chatbot loop
-schema = get_schema()
-print("Simple Conversational AI Data Agent Chatbot (Using CSVs)")
-print("Ask complex business questions about employees, departments, and sales. Type 'exit' to quit.")
-print("Example: 'What is the average salary per department?' or 'Top 10 highest sales in the month of August'")
+# Streamlit app
+st.title("Simple Conversational AI Data Agent")
 
-while True:
-    question = input("> ")
-    if question.lower() == "exit":
-        break
+# Initialize session state for messages
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    code = generate_pandas_code(question, schema)
-    df, error = execute_pandas(code)
-    attempts = 1
-    while error and attempts < 3:
-        print(f"Pandas error: {error}. Attempting to fix...")
-        code = fix_pandas_code(question, schema, code, error)
+# Display chat messages from history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "table" in message:
+            st.dataframe(message["table"])
+        if "chart" in message:
+            st.image(message["chart"])
+
+# Get user input
+question = st.chat_input("Ask complex business questions about employees, departments, and sales. Example: 'What is the average salary per department?' or 'Top 10 highest sales in the month of August'")
+
+if question:
+    # Append user message to history
+    st.session_state.messages.append({"role": "user", "content": question})
+    # Display user message
+    with st.chat_message("user"):
+        st.markdown(question)
+
+    # Generate response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()  # For streaming-like updates if needed
+        schema = get_schema()
+        code = generate_pandas_code(question, schema)
         df, error = execute_pandas(code)
-        attempts += 1
+        attempts = 1
+        while error and attempts < 3:
+            st.info(f"Pandas error: {error}. Attempting to fix...")
+            code = fix_pandas_code(question, schema, code, error)
+            df, error = execute_pandas(code)
+            attempts += 1
 
-    if error:
-        print("Failed to generate valid code after attempts.")
-        continue
+        if error:
+            answer = "Failed to generate a valid query after attempts."
+            st.markdown(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        else:
+            # Display raw table if not empty
+            if not df.empty:
+                st.markdown("**Raw Results Table:**")
+                st.dataframe(df)
 
-    # Print raw table for reference
-    if not df.empty:
-        print("\nRaw Results Table:")
-        print(df)
+            response_text = generate_response(question, df)
+            answer, vis = parse_response(response_text)
+            st.markdown("**Answer:**")
+            st.markdown(answer)
 
-    response_text = generate_response(question, df)
-    answer, vis = parse_response(response_text)
-    print("\nAnswer:")
-    print(answer)
+            message = {"role": "assistant", "content": answer}
+            if not df.empty:
+                message["table"] = df
 
-    if vis != "none":
-        print(f"\nGenerating visualization: {vis}")
-        code = generate_chart_code(vis, df)
-        try:
-            exec(code)
-            print("Chart saved as 'chart.png'. Open the file to view.")
-            import os
-            if os.name == 'nt':  # Windows
-                os.startfile('chart.png')
-            elif os.name == 'posix':  # macOS or Linux
-                os.system("open chart.png" if os.uname().sysname == 'Darwin' else "xdg-open chart.png")
-        except Exception as e:
-            print(f"Chart generation failed: {e}")
+            if vis != "none":
+                st.markdown(f"**Visualization:** {vis}")
+                code = generate_chart_code(vis, df)
+                try:
+                    exec(code)
+                    st.image('chart.png')
+                    message["chart"] = 'chart.png'
+                except Exception as e:
+                    st.error(f"Chart generation failed: {e}")
+
+            # Append assistant message to history
+            st.session_state.messages.append(message)
